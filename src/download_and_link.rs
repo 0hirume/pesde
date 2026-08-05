@@ -475,7 +475,7 @@ impl Project {
 			})
 			.collect::<JoinSet<_>>();
 
-		let mut package_types = HashMap::<PackageId, Arc<[String]>>::default();
+		let mut package_types = HashMap::<PackageId, Arc<[Box<str>]>>::default();
 
 		while let Some(task) = tasks.join_next().await {
 			let (id, types) = task.unwrap()?;

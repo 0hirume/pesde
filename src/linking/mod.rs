@@ -54,7 +54,7 @@ impl Project {
 		&self,
 		graph: &DependencyGraph,
 		package_exports: &HashMap<PackageId, Arc<PackageExports>>,
-		package_types: &HashMap<PackageId, Arc<[String]>>,
+		package_types: &HashMap<PackageId, Arc<[Box<str>]>>,
 	) -> Result<(), errors::LinkingError> {
 		let mut node_tasks = graph
 			.importers
@@ -93,17 +93,26 @@ impl Project {
 							.flat_map(|(id, node)| {
 								node.dependencies
 									.iter()
-									.map(|(dep_alias, dep)| (id.clone(), dep_alias, &dep.id))
+									.map(move |(dep_alias, dep)| (id, dep_alias, &dep.id))
+							})
+							.flat_map(|(dependant_id, dep_alias, dep_id)| {
+								std::iter::once((dependant_id, dep_alias, dep_id)).chain(
+									graph.nodes.get(dep_id).into_iter().flat_map(move |node| {
+										node.dependencies.iter().map(move |(dep_alias, dep)| {
+											(dep_id, dep_alias, &dep.id)
+										})
+									}),
+								)
 							})
 							.map(|(dependant_id, dep_alias, dep_id)| {
 								let subproject = self.clone().subproject(importer.clone());
 								let dependencies_dir = subproject.dependencies_dir();
 								let dep_realm = graph.realm_of(importer, dep_id);
-								let dependant_realm = graph.realm_of(importer, &dependant_id);
+								let dependant_realm = graph.realm_of(importer, dependant_id);
 
 								let structure_kind = &graph.nodes[dep_id].structure_kind;
 								let dependant_structure_kind =
-									&graph.nodes[&dependant_id].structure_kind;
+									&graph.nodes[dependant_id].structure_kind;
 
 								let container_dir = PathBuf::from(PACKAGES_CONTAINER_NAME).join(
 									DependencyGraphNode::container_dir(dep_id, structure_kind),
@@ -120,7 +129,7 @@ impl Project {
 												.join(dependant_realm.packages_dir())
 												.join(PACKAGES_CONTAINER_NAME)
 												.join(DependencyGraphNode::container_dir(
-													&dependant_id,
+													dependant_id,
 													dependant_structure_kind,
 												));
 

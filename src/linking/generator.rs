@@ -17,7 +17,7 @@ use relative_path::RelativePath;
 use tracing::instrument;
 
 struct TypeVisitor {
-	types: Vec<String>,
+	types: Vec<Box<str>>,
 }
 
 impl Visitor for TypeVisitor {
@@ -50,9 +50,10 @@ impl Visitor for TypeVisitor {
 			format_args!("<{}>", generics.into_iter().format(", "))
 		};
 
-		self.types.push(format!(
-			"export type {name}{declaration_generics} = module.{name}{generics}"
-		));
+		self.types.push(
+			format!("export type {name}{declaration_generics} = module.{name}{generics}")
+				.into_boxed_str(),
+		);
 	}
 
 	fn visit_exported_type_function(&mut self, node: &ExportedTypeFunction) {
@@ -67,13 +68,14 @@ impl Visitor for TypeVisitor {
 		let declaration_generics = format_args!("<{}>", params.iter().format(", "));
 		let generics = format_args!("<{}>", params.iter().format(", "));
 
-		self.types.push(format!(
-			"export type {name}{declaration_generics} = module.{name}{generics}\n"
-		));
+		self.types.push(
+			format!("export type {name}{declaration_generics} = module.{name}{generics}\n")
+				.into_boxed_str(),
+		);
 	}
 }
 
-pub(crate) fn get_file_types(file: &str) -> Vec<String> {
+pub(crate) fn get_file_types(file: &str) -> Vec<Box<str>> {
 	let ast = match full_moon::parse(file) {
 		Ok(ast) => ast,
 		Err(err) => {
