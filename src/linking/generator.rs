@@ -1,6 +1,7 @@
 //! Generates linking modules for a project
 use std::borrow::Cow;
 use std::fmt::Display;
+use std::fmt::Write as _;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -17,7 +18,7 @@ use relative_path::RelativePath;
 use tracing::instrument;
 
 struct TypeVisitor {
-	types: Vec<Box<str>>,
+	types: String,
 }
 
 impl Visitor for TypeVisitor {
@@ -50,10 +51,11 @@ impl Visitor for TypeVisitor {
 			format_args!("<{}>", generics.into_iter().format(", "))
 		};
 
-		self.types.push(
-			format!("export type {name}{declaration_generics} = module.{name}{generics}")
-				.into_boxed_str(),
-		);
+		writeln!(
+			self.types,
+			"export type {name}{declaration_generics} = module.{name}{generics}"
+		)
+		.unwrap();
 	}
 
 	fn visit_exported_type_function(&mut self, node: &ExportedTypeFunction) {
@@ -68,14 +70,15 @@ impl Visitor for TypeVisitor {
 		let declaration_generics = format_args!("<{}>", params.iter().format(", "));
 		let generics = format_args!("<{}>", params.iter().format(", "));
 
-		self.types.push(
-			format!("export type {name}{declaration_generics} = module.{name}{generics}\n")
-				.into_boxed_str(),
-		);
+		writeln!(
+			self.types,
+			"export type {name}{declaration_generics} = module.{name}{generics}"
+		)
+		.unwrap();
 	}
 }
 
-pub(crate) fn get_file_types(file: &str) -> Vec<Box<str>> {
+pub(crate) fn get_file_types(file: &str) -> String {
 	let ast = match full_moon::parse(file) {
 		Ok(ast) => ast,
 		Err(err) => {
@@ -85,10 +88,12 @@ pub(crate) fn get_file_types(file: &str) -> Vec<Box<str>> {
 					.format_with("\n", |err, f| f(&format_args!("\t- {err}")))
 			);
 
-			return vec![];
+			return String::new();
 		}
 	};
-	let mut visitor = TypeVisitor { types: vec![] };
+	let mut visitor = TypeVisitor {
+		types: String::new(),
+	};
 	visitor.visit_ast(&ast);
 
 	visitor.types
@@ -96,13 +101,14 @@ pub(crate) fn get_file_types(file: &str) -> Vec<Box<str>> {
 
 /// Generate a linking module for a library
 #[must_use]
-pub fn generate_lib_linking_module(
-	path: &str,
-	types: impl IntoIterator<Item = impl Display>,
-) -> String {
-	let types = types.into_iter().format_with("\n", |ty, f| f(&ty));
+pub fn generate_lib_linking_module(path: &str, types: &str) -> String {
+	let types = if types.is_empty() {
+		format_args!("")
+	} else {
+		format_args!("\n{types}")
+	};
 
-	format!("local module = require({path})\n{types}\nreturn module")
+	format!("local module = require({path}){types}\nreturn module")
 }
 
 fn luau_style_path(path: &Path) -> impl Display {

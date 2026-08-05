@@ -54,7 +54,7 @@ impl Project {
 		&self,
 		graph: &DependencyGraph,
 		package_exports: &HashMap<PackageId, Arc<PackageExports>>,
-		package_types: &HashMap<PackageId, Arc<[Box<str>]>>,
+		package_types: &HashMap<PackageId, Arc<str>>,
 	) -> Result<(), errors::LinkingError> {
 		let mut node_tasks = graph
 			.importers
@@ -234,7 +234,7 @@ impl Project {
 										e,
 									)
 								})?,
-								types.as_deref().unwrap_or(&[]),
+								types.as_deref().unwrap_or(""),
 							);
 
 							write_cas(destination, &cas_dir, &lib_module)

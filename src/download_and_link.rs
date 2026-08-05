@@ -440,34 +440,32 @@ impl Project {
 				let exports = exports.clone();
 
 				async move {
-					let Some(lib_file) = exports.lib_file.as_deref() else {
-						return Ok((package_id, vec![]));
+					let Some(lib_file) = exports
+						.lib_file
+						.as_deref()
+						.filter(|f| f != LINK_LIB_NO_FILE_FOUND)
+					else {
+						return Ok((package_id, String::new()));
 					};
 
-					let types = if lib_file.as_str() == LINK_LIB_NO_FILE_FOUND {
-						vec![]
-					} else {
-						let lib_file = lib_file.to_path(install_path);
+					let lib_file = lib_file.to_path(install_path);
 
-						let contents = match fs::read_to_string(&lib_file).await {
-							Ok(contents) => contents,
-							Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-								return Err(errors::DownloadAndLinkErrorKind::LibFileNotFound(
-									lib_file,
-								)
-								.into());
-							}
-							Err(e) => return Err(e.into()),
-						};
-
-						let types = spawn_blocking(move || get_file_types(&contents))
-							.await
-							.unwrap();
-
-						tracing::debug!("contains {} exported types", types.len());
-
-						types
+					let contents = match fs::read_to_string(&lib_file).await {
+						Ok(contents) => contents,
+						Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+							return Err(errors::DownloadAndLinkErrorKind::LibFileNotFound(
+								lib_file,
+							)
+							.into());
+						}
+						Err(e) => return Err(e.into()),
 					};
+
+					let types = spawn_blocking(move || get_file_types(&contents))
+						.await
+						.unwrap();
+
+					tracing::debug!("contains {} exported types", types.len());
 
 					Ok::<_, errors::DownloadAndLinkError>((package_id, types))
 				}
@@ -475,7 +473,7 @@ impl Project {
 			})
 			.collect::<JoinSet<_>>();
 
-		let mut package_types = HashMap::<PackageId, Arc<[Box<str>]>>::default();
+		let mut package_types = HashMap::<PackageId, Arc<str>>::default();
 
 		while let Some(task) = tasks.join_next().await {
 			let (id, types) = task.unwrap()?;
