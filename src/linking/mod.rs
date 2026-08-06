@@ -105,7 +105,7 @@ impl Project {
 									}),
 								)
 							})
-							.dedup()
+							.unique()
 							.map(|(dependant_id, dep_alias, dep_id)| {
 								let subproject = self.clone().subproject(importer.clone());
 								let dependencies_dir = subproject.dependencies_dir();
