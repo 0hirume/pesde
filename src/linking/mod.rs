@@ -12,6 +12,7 @@ use crate::source::fs::store_in_cas;
 use crate::source::ids::PackageId;
 use crate::util::ToEscaped as _;
 use fs_err::tokio as fs;
+use itertools::Itertools as _;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -104,6 +105,7 @@ impl Project {
 									}),
 								)
 							})
+							.dedup()
 							.map(|(dependant_id, dep_alias, dep_id)| {
 								let subproject = self.clone().subproject(importer.clone());
 								let dependencies_dir = subproject.dependencies_dir();
