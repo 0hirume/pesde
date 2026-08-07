@@ -4,6 +4,7 @@ use crate::Project;
 use crate::graph::DependencyGraph;
 use crate::graph::DependencyGraphNode;
 use crate::linking::generator::LinkDirs;
+use crate::manifest::Alias;
 use crate::source::PackageExports;
 use crate::source::PackageRefs;
 use crate::source::RealmExt as _;
@@ -90,20 +91,31 @@ impl Project {
 					.chain(
 						data.dependencies
 							.values()
-							.filter_map(|(id, _, _)| graph.nodes.get(id).map(|node| (id, node)))
-							.flat_map(|(id, node)| {
-								node.dependencies
-									.iter()
-									.map(move |(dep_alias, dep)| (id, dep_alias, &dep.id))
-							})
-							.flat_map(|(dependant_id, dep_alias, dep_id)| {
-								std::iter::once((dependant_id, dep_alias, dep_id)).chain(
-									graph.nodes.get(dep_id).into_iter().flat_map(move |node| {
-										node.dependencies.iter().map(move |(dep_alias, dep)| {
-											(dep_id, dep_alias, &dep.id)
-										})
-									}),
-								)
+							.flat_map(|(id, _, _)| {
+								fn deps_of<'a>(
+									graph: &'a DependencyGraph,
+									dependant_id: &'a PackageId,
+								) -> impl Iterator<Item = (&'a PackageId, &'a Alias, &'a PackageId)> + 'a
+								{
+									graph.nodes.get(dependant_id).into_iter().flat_map(
+										move |node| {
+											node.dependencies
+												.iter()
+												.filter(|(_, dep)| {
+													graph.nodes.contains_key(&dep.id)
+												})
+												.map(move |(alias, dep)| {
+													(dependant_id, alias, &dep.id)
+												})
+										},
+									)
+								}
+
+								deps_of(graph, id).flat_map(move |dep| {
+									// we need only 2 levels because of the structure of the packages:
+									// if a>b>c, we only need to generate a>b and b>c - b contains the link to c
+									std::iter::once(dep).chain(deps_of(graph, dep.2))
+								})
 							})
 							.unique()
 							.map(|(dependant_id, dep_alias, dep_id)| {
